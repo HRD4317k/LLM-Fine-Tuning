@@ -42,8 +42,8 @@ This repository requires an NVIDIA GPU (Ampere architecture or newer is recommen
 Clone the repository and install the dependencies:
 
 ```bash
-git clone https://github.com/your-org/deterministic-tool-router.git
-cd deterministic-tool-router
+git clone https://github.com/HRD4317k/LLM-Fine-Tuning.git
+cd LLM-Fine-Tuning
 pip install -e .
 ```
 
@@ -93,7 +93,7 @@ python main.py --phase all --profile base
 
 You can execute specific phases of the pipeline sequentially:
 
-1. **Process Data**: Downloads, parses, formats, and tokenizes the dataset.
+1. **Process Data**: Downloads the dataset, carves out a held-out test split (2,000 rows, seed 3407) *before* anything else, adds "no matching tool" negatives, and formats the training rows with 4-step reasoning traces.
    ```bash
    python main.py --phase process
    ```
@@ -108,7 +108,23 @@ You can execute specific phases of the pipeline sequentially:
 
 ## Evaluation & Metrics
 
-The evaluation phase produces detailed metrics to ensure the determinism of your tool router. Reports are saved in `outputs/evaluation_reports/`.
+The evaluation phase runs **only on the held-out split** (`data/raw_test`, never trained on) and grades every response with a schema-aware **AST checker** (`src/models/ast_checker.py`). Reports are saved in `outputs/evaluation_reports/`.
+
+### AST evaluation
+
+Each predicted call is parsed into a tree `{name, arguments}` and checked, in order, for:
+
+1. **Syntax** – the `<tool_call>` block parses into JSON object(s)
+2. **Tool** – the name exists in the provided tools (else *hallucinated tool*) and is the expected tool (else *wrong tool*)
+3. **Parameters** – no parameter outside the schema (*hallucinated param*), every required parameter present (*missing param*); required parameters are read from each tool's schema
+4. **Types** – each value matches the schema type (`str`, `int`, `float`, `bool`, `list`, `dict`)
+5. **Values** – each value equals ground truth (numeric tolerance, case/whitespace-normalised strings)
+
+Parallel calls are matched order-insensitively, so *every* call in a multi-call answer is graded.
+
+Headline numbers in `bfcl_advanced_metrics.json`:
+- `accuracy` = (correct calls + correct refusals) / total
+- `valid_json_rate` = share of responses with a `<tool_call>` block whose JSON parses
 
 The pipeline evaluates:
 - **Accuracy**: True Positives, False Positives, False Negatives, True Negatives.
@@ -117,9 +133,26 @@ The pipeline evaluates:
 
 Visualizations (Confusion Matrix and Error Breakdown charts) are automatically generated for easy analysis.
 
+## Data & Training Details
+
+- **Held-out split first**: `src/pipelines/splits.py` splits xLAM 60k into 58k train / 2k test with a fixed seed and stores the settings in `data/split_meta.json`; the split is rebuilt if the settings change. Training never sees the test rows.
+- **Reasoning traces**: every training response starts with a 4-step `<thought>` (tool assessment → intent matching → parameter extraction with schema-required parameters → validation) and covers *all* parallel calls.
+- **Negatives**: `no_tool_negative_rate` (default 5%) turns positives into "no matching tool" examples by removing the target tool(s) from the tool list, teaching the `[ABORT]` path.
+- **Response-only loss**: with `train_on_responses_only: true` the system prompt, tool list and query are masked out of the loss.
+
 ## QLoRA Implementation Details
 
 This repository implements a textbook QLoRA setup following standard best practices:
 - **NF4 Quantization**: Handled dynamically by Unsloth when `load_in_4bit=True`.
 - **Double Quantization**: Enabled automatically by Unsloth to reduce VRAM overhead of quantization constants.
 - **Paged Optimizers**: Explicitly configured using `paged_adamw_8bit` to offload optimizer states to CPU RAM during GPU memory spikes, preventing OOM errors.
+
+## Tests
+
+```bash
+pytest -q tests/      # AST checker, trace generation, negatives, config (no GPU needed)
+```
+
+## Author
+
+**Rishabh Dehariya** — IIT Kharagpur · [github.com/HRD4317k](https://github.com/HRD4317k)

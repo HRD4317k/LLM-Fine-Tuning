@@ -19,7 +19,10 @@ lora:
 
 data:
   dataset_name: "Beryex/xlam-function-calling-60k-sharegpt"
-  dataset_limit: 60000
+  dataset_limit: 60000        # capped by the train split (60k - test_size)
+  test_size: 2000             # held-out rows, never seen in training
+  split_seed: 3407
+  no_tool_negative_rate: 0.05 # 5% of positives become "no matching tool" aborts
 
 training:
   per_device_train_batch_size: 2
@@ -37,3 +40,4 @@ training:
   logging_dir: "logs"
   report_to: "wandb"
   run_name: "qwen-coder-tool-router-v1"
+  train_on_responses_only: true

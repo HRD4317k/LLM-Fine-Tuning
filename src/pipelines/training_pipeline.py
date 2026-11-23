@@ -77,6 +77,16 @@ class TrainingPipeline:
             ),
             callbacks=[DivergenceGuard()]
         )
+
+        if self.config.training.train_on_responses_only:
+            # Mask system prompt + tool list + user query out of the loss, so the
+            # gradient only comes from the <thought> / <tool_call> response.
+            from unsloth.chat_templates import train_on_responses_only
+            trainer = train_on_responses_only(
+                trainer,
+                instruction_part="<|im_start|>user\n",
+                response_part="<|im_start|>assistant\n",
+            )
         
         last_checkpoint = None
         if os.path.isdir(self.config.training.output_dir):

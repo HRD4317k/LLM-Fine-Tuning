@@ -18,6 +18,12 @@ class LoraConfig(BaseModel):
 class DataConfig(BaseModel):
     dataset_name: str
     dataset_limit: Optional[int] = None
+    # Held-out evaluation set carved out before training (never trained on).
+    test_size: int = 2000
+    split_seed: int = 3407
+    # Fraction of positive examples turned into "no matching tool" negatives by
+    # removing the target tool(s) from the tool list; teaches the abort path.
+    no_tool_negative_rate: float = 0.0
 
 class TrainingConfig(BaseModel):
     per_device_train_batch_size: int
@@ -36,6 +42,8 @@ class TrainingConfig(BaseModel):
     logging_dir: str
     report_to: str = "tensorboard"
     run_name: Optional[str] = None
+    # Compute the loss only on assistant tokens, not on the system prompt / tool list.
+    train_on_responses_only: bool = True
 
 class AppConfig(BaseModel):
     model: ModelConfig

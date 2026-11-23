@@ -1,5 +1,6 @@
 data:
   dataset_limit: 10
+  test_size: 20
 
 training:
   max_steps: 2

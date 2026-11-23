@@ -46,10 +46,8 @@ def main():
         agent = RouterAgent(config)
         _, tokenizer = agent.initialize_model()
         
-        from datasets import load_dataset
-        raw_dataset = load_dataset(config.data.dataset_name, split="train")
-        if config.data.dataset_limit:
-            raw_dataset = raw_dataset.select(range(min(config.data.dataset_limit, len(raw_dataset))))
+        from src.pipelines.splits import make_splits
+        raw_dataset, _ = make_splits(config)  # train rows only; test split is held out
         
         if diag:
             diag.analyze_dataset(raw_dataset)
@@ -80,7 +78,9 @@ def main():
     if args.phase in ['evaluate', 'all']:
         print("\n=== Phase: Evaluate ===")
         evaluation_pipeline = EvaluationPipeline(config, parser_impl)
-        eval_report = evaluation_pipeline.execute(num_samples=100 if not is_smoke_test else 10)
+        eval_report = evaluation_pipeline.execute(
+            num_samples=config.data.test_size if not is_smoke_test else 10
+        )
         
         if diag:
             diag.capture_evaluation_results(eval_report)
